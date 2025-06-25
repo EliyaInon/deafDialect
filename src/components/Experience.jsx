@@ -1,14 +1,33 @@
 import { CameraControls, Environment } from "@react-three/drei";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { VRMAvatar } from "./VRMAvatar";
 import { useSelector } from "react-redux";
 
 export const Experience = () => {
   const controls = useRef();
   const avatar = useSelector((state) => state.avatar.avatar);
-  const results = useSelector((state) => state.videoRecognition.results);
+  const videoResults = useSelector((state) => state.videoRecognition.results);
+  const fileResults = useSelector((state) => state.json.data);
+  const mode = useSelector((state) => state.mode.mode);
 
+  const [results, setResults] = useState();
+
+  useEffect(() => {
+    if (mode === "video") updateVideoResults();
+    else updateFileResults();
+  }, [mode]);
+
+  useEffect(() => {
+    updateVideoResults();
+  }, [videoResults]);
+
+  useEffect(() => {
+    updateFileResults();
+  }, [fileResults]);
+
+  const updateVideoResults = () => setResults(videoResults);
+  const updateFileResults = () => setResults(fileResults);
   return (
     <>
       <CameraControls

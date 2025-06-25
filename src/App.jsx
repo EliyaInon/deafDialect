@@ -5,6 +5,7 @@ import { UI } from "./components/UI";
 import { Leva } from "leva";
 import { VideoWidget } from "./components/VideoWidget";
 import { useSelector } from "react-redux";
+import React from "react";
 
 function App() {
   const videoSrc = useSelector((state) => state.videoRecognition.videoSrc);
@@ -14,8 +15,10 @@ function App() {
     <>
       <UI />
       <Leva hidden />
-      {mode === "video" && videoSrc != undefined && (
+      {mode === "video" && videoSrc != undefined ? (
         <VideoWidget videoSrc={videoSrc} />
+      ) : (
+        <React.Fragment />
       )}
       <Loader />
       <Canvas
