@@ -6,12 +6,12 @@ interface OffsetState {
   handOffset: [number, number, number];
 }
 
-const initialState: OffsetState = {
-  upperArmOffset: [1, 1, 1],
-  lowerArmOffset: [1, 1, 1],
-  handOffset: [1, 1, 1],
+const defaultState: OffsetState = {
+  upperArmOffset: [1, 0.42, 1],
+  lowerArmOffset: [1, 1.32, 1],
+  handOffset: [1, 0.26, 1],
 };
-
+const initialState: OffsetState = defaultState;
 const offsetSlice = createSlice({
   name: "offset",
   initialState,
@@ -25,10 +25,8 @@ const offsetSlice = createSlice({
     setHandOffset(state, action) {
       state.handOffset = action.payload;
     },
-    resetOffsets(state) {
-      state.upperArmOffset = [1, 1, 1];
-      state.lowerArmOffset = [1, 1, 1];
-      state.handOffset = [1, 1, 1];
+    resetOffsets() {
+      return defaultState;
     },
   },
 });
