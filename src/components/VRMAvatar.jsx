@@ -8,6 +8,7 @@ import { Euler, Object3D, Quaternion, Vector3 } from "three";
 import { lerp } from "three/src/math/MathUtils.js";
 import { useVideoRecognition } from "../hooks/useVideoRecognition";
 import { remapMixamoAnimationToVrm } from "../utils/remapMixamoAnimationToVrm";
+import { useSelector } from "react-redux";
 
 const tmpVec3 = new Vector3();
 const tmpQuat = new Quaternion();
@@ -24,7 +25,9 @@ export const VRMAvatar = ({ avatar, ...props }) => {
       });
     }
   );
-
+  const upperArmOffset = useSelector((state) => state.offset.upperArmOffset);
+  const lowerArmOffset = useSelector((state) => state.offset.lowerArmOffset);
+  const handOffset = useSelector((state) => state.offset.handOffset);
   const assetA = useFBX("models/animations/Swing Dancing.fbx");
   const assetB = useFBX("models/animations/Thriller Part 2.fbx");
   const assetC = useFBX("models/animations/Breathing Idle.fbx");
@@ -56,7 +59,6 @@ export const VRMAvatar = ({ avatar, ...props }) => {
 
   useEffect(() => {
     const vrm = userData.vrm;
-    console.log("VRM loaded:", vrm);
     // calling these functions greatly improves the performance
     VRMUtils.removeUnnecessaryVertices(scene);
     VRMUtils.combineSkeletons(scene);
@@ -76,40 +78,75 @@ export const VRMAvatar = ({ avatar, ...props }) => {
   const riggedPose = useRef();
   const riggedLeftHand = useRef();
   const riggedRightHand = useRef();
-
   const resultsCallback = useCallback(
     (results) => {
       if (!videoElement || !currentVrm) {
         return;
       }
+
       if (results.faceLandmarks) {
         riggedFace.current = Face.solve(results.faceLandmarks, {
-          runtime: "mediapipe", // `mediapipe` or `tfjs`
-          video: videoElement,
-          imageSize: { width: 640, height: 480 },
-          smoothBlink: false, // smooth left and right eye blink delays
-          blinkSettings: [0.25, 0.75], // adjust upper and lower bound blink sensitivity
-        });
-      }
-      if (results.za && results.poseLandmarks) {
-        riggedPose.current = Pose.solve(results.za, results.poseLandmarks, {
           runtime: "mediapipe",
           video: videoElement,
+          imageSize: { width: 640, height: 480 },
+          smoothBlink: false,
+          blinkSettings: [0.25, 0.75],
         });
       }
 
-      // Switched left and right (Mirror effect)
+      if (results.za && results.poseLandmarks) {
+        const solved = Pose.solve(results.za, results.poseLandmarks, {
+          runtime: "mediapipe",
+          video: videoElement,
+        });
+
+        const mirrorVector = ({ x, y, z }) => ({
+          x,
+          y: -y,
+          z: -z,
+        });
+        const vector = (obj, x, y, z) => ({
+          x: obj.x * x,
+          y: obj.y * y,
+          z: obj.z * z,
+        });
+
+        const upperArmsOffset = upperArmOffset || [1, 1, 1];
+        const lowerArmsOffset = lowerArmOffset || [1, 1, 1];
+        const handsOffset = handOffset || [1, 1, 1];
+        if (solved) {
+          riggedPose.current = {
+            ...solved,
+            LeftUpperArm: mirrorVector(
+              vector(solved.RightUpperArm, ...upperArmsOffset)
+            ),
+            LeftLowerArm: mirrorVector(
+              vector(solved.RightLowerArm, ...lowerArmsOffset)
+            ),
+            LeftHand: mirrorVector(vector(solved.RightHand, ...handsOffset)),
+            RightUpperArm: mirrorVector(
+              vector(solved.LeftUpperArm, ...upperArmsOffset)
+            ),
+            RightLowerArm: mirrorVector(
+              vector(solved.LeftLowerArm, ...lowerArmsOffset)
+            ),
+            RightHand: mirrorVector(vector(solved.LeftHand, ...handsOffset)),
+          };
+        }
+      }
+
+      if (results.rightHandLandmarks) {
+        riggedLeftHand.current = Hand.solve(results.rightHandLandmarks, "Left");
+      }
+
       if (results.leftHandLandmarks) {
         riggedRightHand.current = Hand.solve(
           results.leftHandLandmarks,
           "Right"
         );
       }
-      if (results.rightHandLandmarks) {
-        riggedLeftHand.current = Hand.solve(results.rightHandLandmarks, "Left");
-      }
     },
-    [videoElement, currentVrm]
+    [videoElement, currentVrm, upperArmOffset, lowerArmOffset, handOffset]
   );
 
   useEffect(() => {
@@ -225,7 +262,7 @@ export const VRMAvatar = ({ avatar, ...props }) => {
           value: blinkRight,
         },
       ].forEach((item) => {
-        lerpExpression(item.name, item.value, delta * 12);
+        lerpExpression(item.name, item.value, delta * 5);
       });
     } else {
       if (riggedFace.current) {
@@ -259,15 +296,15 @@ export const VRMAvatar = ({ avatar, ...props }) => {
             value: 1 - riggedFace.current.eye.r,
           },
         ].forEach((item) => {
-          lerpExpression(item.name, item.value, delta * 12);
+          lerpExpression(item.name, item.value, delta * 5);
         });
       }
       // Eyes
       if (lookAtTarget.current) {
         userData.vrm.lookAt.target = lookAtTarget.current;
         lookAtDestination.current.set(
-          -2 * riggedFace.current.pupil.x,
-          2 * riggedFace.current.pupil.y,
+          -15 * riggedFace.current.pupil.x,
+          15 * riggedFace.current.pupil.y,
           0
         );
         lookAtTarget.current.position.lerp(
@@ -278,206 +315,210 @@ export const VRMAvatar = ({ avatar, ...props }) => {
 
       // Body
       rotateBone("neck", riggedFace.current.head, delta * 5, {
-        x: 0.7,
-        y: 0.7,
-        z: 0.7,
+        x: 0.3,
+        y: -0.3,
+        z: -0.3,
       });
     }
     if (riggedPose.current) {
+      // Body
       rotateBone("chest", riggedPose.current.Spine, delta * 5, {
-        x: 0.3,
-        y: 0.3,
-        z: 0.3,
+        x: 0.1,
+        y: -0.1,
+        z: -0.1,
       });
       rotateBone("spine", riggedPose.current.Spine, delta * 5, {
-        x: 0.3,
-        y: 0.3,
-        z: 0.3,
+        x: 0.1,
+        y: -0.1,
+        z: -0.1,
       });
       rotateBone("hips", riggedPose.current.Hips.rotation, delta * 5, {
-        x: 0.7,
-        y: 0.7,
-        z: 0.7,
+        x: 0.1,
+        y: -0.1,
+        z: -0.1,
       });
 
       // LEFT ARM
       rotateBone("leftUpperArm", riggedPose.current.LeftUpperArm, delta * 5);
       rotateBone("leftLowerArm", riggedPose.current.LeftLowerArm, delta * 5);
+
       // RIGHT ARM
       rotateBone("rightUpperArm", riggedPose.current.RightUpperArm, delta * 5);
       rotateBone("rightLowerArm", riggedPose.current.RightLowerArm, delta * 5);
 
-      if (riggedLeftHand.current) {
+      if (riggedLeftHand.current && riggedLeftHand.current.LeftWrist) {
         rotateBone(
           "leftHand",
           {
-            z: riggedPose.current.LeftHand.z,
+            z: riggedPose.current.LeftHand?.z || 0,
             y: riggedLeftHand.current.LeftWrist.y,
             x: riggedLeftHand.current.LeftWrist.x,
           },
-          delta * 12
+          delta * 5
         );
+
         rotateBone(
           "leftRingProximal",
           riggedLeftHand.current.LeftRingProximal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "leftRingIntermediate",
           riggedLeftHand.current.LeftRingIntermediate,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "leftRingDistal",
           riggedLeftHand.current.LeftRingDistal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "leftIndexProximal",
           riggedLeftHand.current.LeftIndexProximal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "leftIndexIntermediate",
           riggedLeftHand.current.LeftIndexIntermediate,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "leftIndexDistal",
           riggedLeftHand.current.LeftIndexDistal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "leftMiddleProximal",
           riggedLeftHand.current.LeftMiddleProximal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "leftMiddleIntermediate",
           riggedLeftHand.current.LeftMiddleIntermediate,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "leftMiddleDistal",
           riggedLeftHand.current.LeftMiddleDistal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "leftThumbProximal",
           riggedLeftHand.current.LeftThumbProximal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "leftThumbMetacarpal",
           riggedLeftHand.current.LeftThumbIntermediate,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "leftThumbDistal",
           riggedLeftHand.current.LeftThumbDistal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "leftLittleProximal",
           riggedLeftHand.current.LeftLittleProximal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "leftLittleIntermediate",
           riggedLeftHand.current.LeftLittleIntermediate,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "leftLittleDistal",
           riggedLeftHand.current.LeftLittleDistal,
-          delta * 12
+          delta * 5
         );
       }
 
-      if (riggedRightHand.current) {
+      if (riggedRightHand.current && riggedRightHand.current.RightWrist) {
         rotateBone(
           "rightHand",
           {
-            z: riggedPose.current.RightHand.z,
+            z: riggedPose.current.RightHand?.z || 0,
             y: riggedRightHand.current.RightWrist.y,
             x: riggedRightHand.current.RightWrist.x,
           },
-          delta * 12
+          delta * 5
         );
+
         rotateBone(
           "rightRingProximal",
           riggedRightHand.current.RightRingProximal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "rightRingIntermediate",
           riggedRightHand.current.RightRingIntermediate,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "rightRingDistal",
           riggedRightHand.current.RightRingDistal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "rightIndexProximal",
           riggedRightHand.current.RightIndexProximal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "rightIndexIntermediate",
           riggedRightHand.current.RightIndexIntermediate,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "rightIndexDistal",
           riggedRightHand.current.RightIndexDistal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "rightMiddleProximal",
           riggedRightHand.current.RightMiddleProximal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "rightMiddleIntermediate",
           riggedRightHand.current.RightMiddleIntermediate,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "rightMiddleDistal",
           riggedRightHand.current.RightMiddleDistal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "rightThumbProximal",
           riggedRightHand.current.RightThumbProximal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "rightThumbMetacarpal",
           riggedRightHand.current.RightThumbIntermediate,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "rightThumbDistal",
           riggedRightHand.current.RightThumbDistal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "rightLittleProximal",
           riggedRightHand.current.RightLittleProximal,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "rightLittleIntermediate",
           riggedRightHand.current.RightLittleIntermediate,
-          delta * 12
+          delta * 5
         );
         rotateBone(
           "rightLittleDistal",
           riggedRightHand.current.RightLittleDistal,
-          delta * 12
+          delta * 5
         );
       }
     }

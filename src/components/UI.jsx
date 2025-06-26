@@ -4,9 +4,19 @@ import { setVideoSrc } from "../store/videoRecognitionSlice";
 import { setJsonData, setJsonFileName } from "../store/jsonSlice";
 import { getModeName, setMode } from "../store/modeSlice";
 import { setAvatar } from "../store/avatarSlice";
+import {
+  setUpperArmOffset,
+  setLowerArmOffset,
+  setHandOffset,
+  resetOffsets,
+} from "../store/offsetSlice";
+import { OffsetSliders } from "../components/OffsetSliders";
 
 export const UI = () => {
   const dispatch = useDispatch();
+
+  const offset = useSelector((state) => state.offset);
+
   const mode = useSelector((state) => state.mode.mode);
   const jsonFileName = useSelector((state) => state.json.jsonFileName);
   const videoFileName = useSelector(
@@ -147,11 +157,34 @@ export const UI = () => {
         <div className="px-3 text-sm text-gray-300">
           <strong>קובץ טעינה:</strong> {getModeName(mode)}
         </div>
+
         <p className="text-xs text-gray-300 mt-1 truncate max-w-xs">
           {mode === "video"
             ? videoFileName && <>📼 {videoFileName}</>
             : jsonFileName && <>📄 {jsonFileName}</>}
         </p>
+
+        <OffsetSliders
+          label="Upper Arm Offset"
+          offset={offset.upperArmOffset}
+          setOffset={setUpperArmOffset}
+        />
+        <OffsetSliders
+          label="Lower Arm Offset"
+          offset={offset.lowerArmOffset}
+          setOffset={setLowerArmOffset}
+        />
+        <OffsetSliders
+          label="Hand Offset"
+          offset={offset.handOffset}
+          setOffset={setHandOffset}
+        />
+        <button
+          className="bg-gray-500 hover:bg-gray-600 px-3 py-1 rounded w-full"
+          onClick={() => dispatch(resetOffsets())}
+        >
+          איפוס אופסטים
+        </button>
       </div>
     </>
   );

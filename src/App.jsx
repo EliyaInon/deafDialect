@@ -4,21 +4,24 @@ import { Experience } from "./components/Experience";
 import { UI } from "./components/UI";
 import { Leva } from "leva";
 import { VideoWidget } from "./components/VideoWidget";
+import { JsonWidget } from "./components/JsonWidget";
 import { useSelector } from "react-redux";
-import React from "react";
+import React, { useState } from "react";
 
 function App() {
   const videoSrc = useSelector((state) => state.videoRecognition.videoSrc);
+  const jsonFile = useSelector((state) => state.json);
   const mode = useSelector((state) => state.mode.mode);
 
   return (
     <>
       <UI />
       <Leva hidden />
+
       {mode === "video" && videoSrc != undefined ? (
         <VideoWidget videoSrc={videoSrc} />
       ) : (
-        <React.Fragment />
+        <JsonWidget jsonFile={jsonFile} />
       )}
       <Loader />
       <Canvas
